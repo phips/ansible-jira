@@ -1,0 +1,75 @@
+#!/bin/sh
+# atlassian startup script
+# chkconfig: 2345 80 05
+# description: Jira service
+### BEGIN INIT INFO
+# Provides: jira
+# Required-Start: $local_fs $remote_fs $network $named $syslog $time
+# Required-Stop: $local_fs $remote_fs $network $named $syslog $time
+# Short-Description: start and stop an Atlassian service
+# Description: Atlassian jira Service
+### END INIT INFO
+
+# Define some variables
+# Name of app
+prog=jira
+# Name of the user to run as
+user=jira
+# Location of application's directory
+base={{ jira_installto }}/atlassian/${prog}-{{ jira_version }}-standalone
+# Location of Java JDK
+export JAVA_HOME=/usr/lib/jvm/jre
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+# Source override configuration.
+[ -e /etc/sysconfig/$prog ] && . /etc/sysconfig/$prog
+
+lockfile=/var/lock/subsys/$prog
+pidfile=/var/run/${prog}.pid
+
+rh_status() {
+    status -p $pidfile jira
+}
+
+case "$1" in
+    start)
+        if [ -f $lockfile ]; then
+            # already running
+            action $"Starting $prog: " /bin/true
+        else
+            action $"Starting $prog: " /bin/su -m $user -c "${base}/bin/startup.sh &> /dev/null"
+            ret=$?
+            if [ $ret -eq 0 ]; then
+                touch $lockfile
+                echo $(pgrep -fn $prog) > $pidfile
+            fi
+        fi
+    ;;
+    stop)
+        action $"Stopping $prog: " /bin/su -m $user -c "$base/bin/shutdown.sh &> /dev/null"
+        ret=$?
+        if [ $ret -eq 0 ]; then
+            rm $lockfile $pidfile
+        fi
+    ;;
+    restart)
+        $0 stop
+        sleep 5
+        $0 start
+    ;;
+    status)
+        rh_status
+        RETVAL=$?
+        if [ $RETVAL -eq 3 -a -f $lockfile ] ; then
+                RETVAL=2
+        fi
+    ;;
+    *)
+        echo "Usage: /etc/init.d/$prog {start|restart|stop|status}"
+        exit 1
+    ;;
+esac
+
+exit 0

@@ -1,0 +1,13 @@
+---
+# defaults file for jira
+
+jira_version: 6.2.6
+jira_bitness: 64
+jira_baseurl:   http://www.atlassian.com/software/jira/downloads/binary
+jira_installer: atlassian-jira-{{ jira_version }}.tar.gz
+jira_user:      jira
+# use postgresql or mysql
+jira_dbconnector: postgresql
+jira_tmp:       /var/tmp
+jira_installto: /opt
+jira_datadir:   /srv/jira-data

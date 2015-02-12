@@ -1,0 +1,62 @@
+---
+# tasks file for jira
+# vim: set ft=ansible ts=2 sw=2:
+
+- name: Check for OS support
+  fail: msg="OS is not supported"
+  when: ansible_os_family != 'RedHat'
+
+- name: Ensure group exists
+  group: name={{ jira_user }} state=present
+
+- name: Ensure user exists
+  user: name={{ jira_user }} group={{ jira_user }} state=present
+
+- name: Fetch installer
+  get_url:
+    url={{ jira_baseurl }}/{{ jira_installer }}
+    dest={{ jira_tmp }}/{{ jira_installer }}
+  register: fetch
+  tags: install
+
+- name: Extract installation
+  shell: tar xvf {{ jira_tmp }}/{{ jira_installer }} -C {{ jira_installto }} --transform='s#\(atlassian\)-#\1/#'
+  when: fetch.changed
+  tags: install
+
+- name: Ensure consistent file ownership
+  file: path={{ jira_installto }}/atlassian/jira-{{ jira_version }}-standalone recurse=true
+        owner={{ jira_user }} group={{ jira_user }}
+
+- name: Ensure data dir exists
+  file: path={{ jira_datadir }} state=directory
+        owner={{ jira_user }} group={{ jira_user }}
+
+- name: Set data dir in tomcat config
+  lineinfile:
+    dest={{ jira_installto }}/atlassian/jira-{{ jira_version }}-standalone/atlassian-jira/WEB-INF/classes/jira-application.properties
+    regexp="^jira.home"
+    line="jira.home={{ jira_datadir }}"
+    state=present
+  tags: install
+
+- name: Ensure logs symlink exists
+  file: src={{ jira_installto }}/atlassian/jira-{{ jira_version }}-standalone/logs
+        path=/var/log/jira
+        state=link
+  tags: install
+
+- name: Ensure service definition exists
+  template: src=service.init.j2 dest=/etc/init.d/jira
+            owner=root group=root mode=0755
+  tags: install
+
+- name: add proxy config to Tomcat settings
+  template: >
+    src=server.xml.j2 dest=/opt/atlassian/jira-{{ jira_version }}-standalone/conf/server.xml
+    owner={{ jira_user }} group={{ jira_user }} mode=0644
+  tags: install
+  when: jira_proxy
+
+- name: Ensure service is set to run
+  service: name=jira state=restarted enabled=yes
